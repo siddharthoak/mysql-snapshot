@@ -1,0 +1,34 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Plaid Link Update</title>
+</head>
+<body>
+  <button id="link-button">Update Plaid Item</button>
+
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+  <script>
+    // Paste your link_token here
+    const linkToken = "link-sandbox-9f184f7a-f45a-4606-b80b-b1d20139605a";
+
+    const handler = Plaid.create({
+      token: linkToken,
+      onSuccess: (public_token, metadata) => {
+        console.log('Success! Item updated.');
+        console.log('Metadata:', metadata);
+        alert('Item successfully updated! Your access token is now working again.');
+      },
+      onExit: (err, metadata) => {
+        if (err != null) {
+          console.error('Error:', err);
+        }
+        console.log('Exit metadata:', metadata);
+      },
+    });
+
+    document.getElementById('link-button').addEventListener('click', function() {
+      handler.open();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+./create-mysql-snapshot.sh -c halo_mysql -d halo_chat      
+
+./restore-mysql-snapshot.sh -c halo_mysql -d halo_chat -p rootpassword -f snapshots/halo_chat_20250915_173513.sql
