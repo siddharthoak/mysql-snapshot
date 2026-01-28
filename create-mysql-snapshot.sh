@@ -54,6 +54,8 @@ MYSQL_PORT=${MYSQL_PORT:-"3306"}
 SNAPSHOT_DIR=${SNAPSHOT_DIR:-"./snapshots"}
 SNAPSHOT_NAME=${SNAPSHOT_NAME:-"${DATABASE_NAME}_$(date +%Y%m%d_%H%M%S)"}
 DATA_DIR=${DATA_DIR:-"./data"}
+DOCUMENT_SUMMARY_SOURCE="dump"
+
 # Logging functions
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1"
@@ -383,6 +385,7 @@ import_csv_file_no_clear() {
                    LINES TERMINATED BY '\n' 
                    IGNORE 1 ROWS;"
     fi
+    
     log "  Executing import SQL..."
     # Debug: Show first few lines of the processed CSV
     log "  Debugging: First 3 lines of processed CSV:"
@@ -421,6 +424,63 @@ import_csv_file_no_clear() {
     log "  ✓ Imported $csv_name successfully"
     return 0
 }
+
+# Load document_summary from SQL dump file
+load_document_summary_dump() {
+    log "Loading document_summary from SQL dump file..."
+    
+    # Find the dump file matching pattern document_summary_*.sql.gz
+    local dump_files=($(find "$DATA_DIR" -name "document_summary_*.sql.gz" -type f 2>/dev/null))
+    
+    if [ ${#dump_files[@]} -eq 0 ]; then
+        error "No document_summary_*.sql.gz dump file found in $DATA_DIR"
+        return 1
+    fi
+    
+    if [ ${#dump_files[@]} -gt 1 ]; then
+        warning "Multiple dump files found, using first one: ${dump_files[0]}"
+    fi
+    
+    local dump_file="${dump_files[0]}"
+    local dump_name=$(basename "$dump_file")
+    
+    log "  Found dump file: $dump_name"
+    log "  File size: $(wc -c < "$dump_file") bytes"
+    
+    # Copy dump file to container
+    log "  Copying dump file to container..."
+    if ! docker cp "$dump_file" "$CONTAINER_NAME:/tmp/$dump_name"; then
+        error "Failed to copy $dump_name to container"
+        return 1
+    fi
+    
+    # Decompress and execute SQL dump
+    log "  Decompressing and executing SQL dump..."
+    local exec_result
+    exec_result=$(docker exec $CONTAINER_NAME bash -c "gunzip -c /tmp/$dump_name | mysql -u root -p'$MYSQL_ROOT_PASSWORD' $DATABASE_NAME" 2>&1)
+    local exec_exit_code=$?
+    
+    if [ $exec_exit_code -ne 0 ]; then
+        log "  SQL dump execution failed with exit code: $exec_exit_code"
+        log "  Error output: $exec_result"
+        docker exec $CONTAINER_NAME rm -f "/tmp/$dump_name"
+        error "Failed to execute document_summary SQL dump"
+        return 1
+    fi
+    
+    # Clean up temporary file
+    docker exec $CONTAINER_NAME rm -f "/tmp/$dump_name"
+    
+    # Verify import
+    local final_count=$(docker exec $CONTAINER_NAME mysql \
+        -u root -p"$MYSQL_ROOT_PASSWORD" \
+        $DATABASE_NAME \
+        -e "SELECT COUNT(*) FROM document_summary;" 2>/dev/null | tail -n 1)
+    
+    log "  ✓ SQL dump loaded successfully. Final row count: $final_count"
+    return 0
+}
+
 # Setup database with DDL and data
 setup_database() {
     log "Setting up database with DDL and data..."
@@ -448,12 +508,22 @@ setup_database() {
     else
         warning "No customers CSV files found or import failed"
     fi
-    # 4. Import summary data 
-    log "Step 4: Importing summary data "
-    if find_csv_files "document_summary" "document_summary"; then
-        log "Document summary data import completed"
+    # 4. Import or load document_summary data based on DOCUMENT_SUMMARY_SOURCE flag
+    log "Step 4: Loading document_summary data (source: $DOCUMENT_SUMMARY_SOURCE)"
+    if [ "$DOCUMENT_SUMMARY_SOURCE" = "csv" ]; then
+        # Load from CSV (original behavior)
+        if find_csv_files "document_summary" "document_summary"; then
+            log "Document summary CSV import completed"
+        else
+            warning "Document summary CSV files not found or import failed"
+        fi
     else
-        warning "Document summary CSV files found or import failed"
+        # Load from dump (default)
+        if load_document_summary_dump; then
+            log "Document summary SQL dump loaded successfully"
+        else
+            warning "Failed to load document summary SQL dump"
+        fi
     fi
     log "Database setup completed"
 }
