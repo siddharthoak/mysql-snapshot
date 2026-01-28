@@ -486,14 +486,8 @@ setup_database() {
     log "Setting up database with DDL and data..."
     # 0. Drop and recreate database for clean setup
     log "Step 0: Recreating database for clean setup..."
-    recreate_database
+    
     # 1. Execute DDL first
-    log "Step 1: Executing DDL..."
-    if execute_sql_file "$DATA_DIR/HALO_DDL.sql"; then
-        log "DDL execution completed"
-    else
-        warning "DDL execution had issues, but continuing with data import..."
-    fi
     # 2. Import users data (files starting with "users")
     log "Step 2: Importing users data..."
     if find_csv_files "users" "users"; then
@@ -610,12 +604,12 @@ main() {
     # Setup or start container
     check_container
     # Setup database if data files exist
-    if [ -f "$DATA_DIR/HALO_DDL.sql" ] || [ -n "$(find "$DATA_DIR" -name "users*.csv" -o -name "customers*.csv" 2>/dev/null)" ]; then
+    if  [ -n "$(find "$DATA_DIR" -name "users*.csv" -o -name "customers*.csv" 2>/dev/null)" ]; then
         log "Data files found, setting up database..."
         setup_database
         verify_database
     else
-        log "No data files found in $DATA_DIR (HALO_DDL.sql, users*.csv, or customers*.csv), skipping database setup"
+        log "No data files found in $DATA_DIR (users*.csv, or customers*.csv), skipping database setup"
     fi
     # Export snapshot
     export_database_snapshot
