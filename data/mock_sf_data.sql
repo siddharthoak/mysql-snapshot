@@ -83,7 +83,7 @@ BEGIN
                 SET v_customer_age = 54;
                 SET v_customer_profession = 'real estate income';
                 SET v_lead_id = NULL;
-                SET v_current_advisor = 'ria-dev-001';
+                SET v_current_advisor = '1';
             WHEN 1 THEN
                 SET v_customer_name = 'James Williams';
                 SET v_customer_email = 'james.williams@yahoo.com';
@@ -94,7 +94,7 @@ BEGIN
                 SET v_customer_age = 68;
                 SET v_customer_profession = 'Hospital';
                 SET v_lead_id = NULL;
-                SET v_current_advisor = 'ria-dev-002';
+                SET v_current_advisor = '2';
             WHEN 2 THEN
                 SET v_customer_name = 'Joshua Phillips';
                 SET v_customer_email = 'joshua.phillips@hotmail.com';
@@ -105,7 +105,7 @@ BEGIN
                 SET v_customer_age = 38;
                 SET v_customer_profession = 'Nurse Practitioner';
                 SET v_lead_id = NULL;
-                SET v_current_advisor = 'ria-dev-003';
+                SET v_current_advisor = '3';
             WHEN 3 THEN
                 SET v_customer_name = 'Linda Black';
                 SET v_customer_email = 'linda.black@outlook.com';
@@ -116,7 +116,7 @@ BEGIN
                 SET v_customer_age = 67;
                 SET v_customer_profession = 'Retired';
                 SET v_lead_id = 1001;
-                SET v_current_advisor = 'ria-dev-001';
+                SET v_current_advisor = '1';
             WHEN 4 THEN
                 SET v_customer_name = 'Michael Davis';
                 SET v_customer_email = 'michael.davis@gmail.com';
@@ -127,7 +127,7 @@ BEGIN
                 SET v_customer_age = 51;
                 SET v_customer_profession = 'Sr. Director Operations';
                 SET v_lead_id = 1002;
-                SET v_current_advisor = 'ria-dev-001';
+                SET v_current_advisor = '1';
             WHEN 5 THEN
                 SET v_customer_name = 'Robert Pope';
                 SET v_customer_email = 'r.pope@yahoo.com';
@@ -138,7 +138,7 @@ BEGIN
                 SET v_customer_age = 75;
                 SET v_customer_profession = 'Publishing';
                 SET v_lead_id = 1003;
-                SET v_current_advisor = 'ria-dev-001';
+                SET v_current_advisor = '1';
             WHEN 6 THEN
                 SET v_customer_name = 'Patricia Solis';
                 SET v_customer_email = 'patricia.solis@outlook.com';
@@ -149,7 +149,7 @@ BEGIN
                 SET v_customer_age = 63;
                 SET v_customer_profession = 'Writer';
                 SET v_lead_id = 1004;
-                SET v_current_advisor = 'ria-dev-002';
+                SET v_current_advisor = '2';
             WHEN 7 THEN
                 SET v_customer_name = 'David Fletcher';
                 SET v_customer_email = 'david.fletcher@gmail.com';
@@ -160,7 +160,7 @@ BEGIN
                 SET v_customer_age = 54;
                 SET v_customer_profession = 'N/A';
                 SET v_lead_id = 1005;
-                SET v_current_advisor = 'ria-dev-002';
+                SET v_current_advisor = '2';
             WHEN 8 THEN
                 SET v_customer_name = 'John Myers';
                 SET v_customer_email = 'john.myers@hotmail.com';
@@ -171,7 +171,7 @@ BEGIN
                 SET v_customer_age = 69;
                 SET v_customer_profession = 'Prefer not to say';
                 SET v_lead_id = 1006;
-                SET v_current_advisor = 'ria-dev-002';
+                SET v_current_advisor = '2';
             WHEN 9 THEN
                 SET v_customer_name = 'Christopher Smith';
                 SET v_customer_email = 'csmith@yahoo.com';
@@ -182,7 +182,7 @@ BEGIN
                 SET v_customer_age = 34;
                 SET v_customer_profession = 'Construction worker';
                 SET v_lead_id = 1007;
-                SET v_current_advisor = 'ria-dev-003';
+                SET v_current_advisor = '3';
             WHEN 10 THEN
                 SET v_customer_name = 'Barbara Rodriguez';
                 SET v_customer_email = 'barbara.rodriguez@gmail.com';
@@ -543,18 +543,18 @@ BEGIN
     -- PART 2: Generate bulk dummy data for 3 advisors
     -- ==============================================
     
-    -- Loop through 3 advisors (ria-dev-001, ria-dev-002, ria-dev-003)
+    -- Loop through 3 advisors (1, 2, 3)
     WHILE v_advisor_counter < 3 DO
         -- Set the current advisor_id, base offset, and customer count
         CASE v_advisor_counter
             WHEN 0 THEN 
-                SET v_current_advisor = 'ria-dev-001';
+                SET v_current_advisor = '1';
                 SET v_base_offset = 1000;  -- Start at 1000
             WHEN 1 THEN 
-                SET v_current_advisor = 'ria-dev-002';
+                SET v_current_advisor = '2';
                 SET v_base_offset = 2000;  -- Start at 2000
             ELSE 
-                SET v_current_advisor = 'ria-dev-003';
+                SET v_current_advisor = '3';
                 SET v_base_offset = 3000;  -- Start at 3000
         END CASE;
         
@@ -864,5 +864,6 @@ BEGIN
     COMMIT;
 
 END$$
+
 
 DELIMITER ;

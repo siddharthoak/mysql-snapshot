@@ -481,13 +481,145 @@ load_document_summary_dump() {
     return 0
 }
 
+# Execute stored procedure file (handles DELIMITER changes)
+execute_stored_procedure_file() {
+    local file_path="$DATA_DIR/mock_sf_data.sql"
+    local file_name=$(basename "$file_path")
+    
+    if [ ! -f "$file_path" ]; then
+        warning "Stored procedure file $file_path not found, skipping..."
+        return 1
+    fi
+    
+    log "Executing stored procedure file: $file_name"
+    
+    # Copy file to container
+    if ! docker cp "$file_path" "$CONTAINER_NAME:/tmp/$file_name"; then
+        error "Failed to copy $file_name to container"
+    fi
+    
+    # Execute SQL file from within container (this handles DELIMITER properly)
+    log "Creating stored procedure from $file_name..."
+    local exec_output
+    exec_output=$(docker exec $CONTAINER_NAME bash -c "mysql -u root -p'$MYSQL_ROOT_PASSWORD' $DATABASE_NAME < /tmp/$file_name" 2>&1)
+    local exit_code=$?
+    
+    if [ $exit_code -ne 0 ]; then
+        log "Stored procedure execution failed with exit code: $exit_code"
+        log "Error output: $exec_output"
+        docker exec $CONTAINER_NAME rm -f "/tmp/$file_name"
+        error "Failed to execute stored procedure file $file_name"
+        return 1
+    fi
+    
+    log "SQL file executed with exit code: $exit_code"
+    if [ -n "$exec_output" ]; then
+        log "Output: $exec_output"
+    fi
+    
+    # Verify the procedure was created
+    log "Verifying stored procedure creation..."
+    local proc_check
+    proc_check=$(docker exec $CONTAINER_NAME mysql \
+        -u root -p"$MYSQL_ROOT_PASSWORD" \
+        $DATABASE_NAME \
+        -e "SHOW PROCEDURE STATUS WHERE Db = '$DATABASE_NAME' AND Name = 'generate_advisor_customer_data';" 2>&1)
+    
+    if echo "$proc_check" | grep -q "generate_advisor_customer_data"; then
+        log "✓ Stored procedure 'generate_advisor_customer_data' created successfully"
+    else
+        warning "✗ Stored procedure 'generate_advisor_customer_data' was not found after execution"
+        log "Procedure check output: $proc_check"
+    fi
+    
+    # Clean up temporary file in container
+    docker exec $CONTAINER_NAME rm -f "/tmp/$file_name"
+    
+    return 0
+}
+
+# Invoke the stored procedure
+invoke_stored_procedure() {
+    log "Invoking stored procedure: generate_advisor_customer_data"
+    
+    # First verify the procedure exists
+    local proc_exists
+    proc_exists=$(docker exec $CONTAINER_NAME mysql \
+        -u root -p"$MYSQL_ROOT_PASSWORD" \
+        $DATABASE_NAME \
+        -e "SHOW PROCEDURE STATUS WHERE Db = '$DATABASE_NAME' AND Name = 'generate_advisor_customer_data';" 2>/dev/null | wc -l)
+    
+    if [ "$proc_exists" -lt 2 ]; then
+        error "Stored procedure 'generate_advisor_customer_data' does not exist. Cannot invoke."
+        return 1
+    fi
+    
+    log "Stored procedure exists, calling it now..."
+    
+    # Call the stored procedure with detailed output
+    local call_output
+    call_output=$(docker exec $CONTAINER_NAME mysql \
+        -u root -p"$MYSQL_ROOT_PASSWORD" \
+        $DATABASE_NAME \
+        -vvv \
+        -e "CALL generate_advisor_customer_data();" 2>&1)
+    local call_exit_code=$?
+    
+    if [ $call_exit_code -ne 0 ]; then
+        log "Stored procedure call failed with exit code: $call_exit_code"
+        log "Error output: $call_output"
+        error "Failed to invoke stored procedure generate_advisor_customer_data"
+        return 1
+    fi
+    
+    log "Stored procedure executed with exit code: $call_exit_code"
+    if [ -n "$call_output" ]; then
+        log "Procedure output: $call_output"
+    fi
+    
+    log "Successfully executed stored procedure generate_advisor_customer_data"
+    
+    # Show some statistics about generated data
+    log "Checking generated data..."
+    docker exec $CONTAINER_NAME mysql \
+        -u root -p"$MYSQL_ROOT_PASSWORD" \
+        $DATABASE_NAME \
+        -e "SELECT 'customers' as table_name, COUNT(*) as row_count FROM customers 
+            UNION ALL 
+            SELECT 'users', COUNT(*) FROM users;" 2>/dev/null || true
+    
+    return 0
+}
+
+
+# Setup database with DDL and data
+
 # Setup database with DDL and data
 setup_database() {
     log "Setting up database with DDL and data..."
+    
     # 0. Drop and recreate database for clean setup
     log "Step 0: Recreating database for clean setup..."
+    # recreate_database
     
     # 1. Execute DDL first
+    log "Step 1: Executing DDL..."
+    execute_sql_file "$DATA_DIR/ddl.sql"
+    
+    # 1.5. Execute stored procedure file and invoke it
+    log "Step 1.5: Setting up and executing stored procedures..."
+    if execute_stored_procedure_file; then
+        log "Stored procedure file executed successfully"
+        # Invoke the stored procedure to generate mock data
+        if invoke_stored_procedure; then
+            log "Stored procedure invoked successfully"
+        else
+            warning "Failed to invoke stored procedure, continuing anyway..."
+        fi
+    else
+        warning "Stored procedure file not found or failed to execute, continuing anyway..."
+    fi
+    
     # 2. Import users data (files starting with "users")
     log "Step 2: Importing users data..."
     if find_csv_files "users" "users"; then
@@ -495,15 +627,10 @@ setup_database() {
     else
         warning "No users CSV files found or import failed"
     fi
-    # 3. Import customers data (files starting with "customers") - with binary(16) support
-    log "Step 3: Importing customers data (with binary(16) ID support)..."
-    if find_csv_files "customers" "customers"; then
-        log "Customers data import completed"
-    else
-        warning "No customers CSV files found or import failed"
-    fi
-    # 4. Import or load document_summary data based on DOCUMENT_SUMMARY_SOURCE flag
-    log "Step 4: Loading document_summary data (source: $DOCUMENT_SUMMARY_SOURCE)"
+    
+    
+    # 3. Import or load document_summary data based on DOCUMENT_SUMMARY_SOURCE flag
+    log "Step 3: Loading document_summary data (source: $DOCUMENT_SUMMARY_SOURCE)"
     if [ "$DOCUMENT_SUMMARY_SOURCE" = "csv" ]; then
         # Load from CSV (original behavior)
         if find_csv_files "document_summary" "document_summary"; then
@@ -519,8 +646,11 @@ setup_database() {
             warning "Failed to load document summary SQL dump"
         fi
     fi
+    
     log "Database setup completed"
 }
+
+
 # Export entire database snapshot
 export_database_snapshot() {
     log "Creating complete database snapshot..."
